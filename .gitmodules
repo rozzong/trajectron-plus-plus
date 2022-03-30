@@ -1,3 +1,0 @@
-[submodule "experiments/nuScenes/devkit"]
-	path = experiments/nuScenes/devkit
-	url = https://github.com/nutonomy/nuscenes-devkit
