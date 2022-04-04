@@ -1,5 +1,5 @@
 from itertools import product
-from typing import Any, Dict, Mapping, Tuple, Union
+from typing import Any, Dict, Mapping, Tuple
 
 import numpy as np
 

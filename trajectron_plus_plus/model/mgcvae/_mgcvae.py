@@ -1,22 +1,22 @@
 from inspect import stack
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 import torch
 import torch.nn as nn
 
 from .encoding import MultimodalGenerativeCVAEEncoder
-from .latent import DiscreteLatent, Mode
+from .latent import DiscreteLatent
 from .decoding import MultimodalGenerativeCVAEDecoder
 
 
 class MultimodalGenerativeCVAE(nn.Module):
-    """
+    """Multimodal Generative Conditional Variational Autoencoder.
 
     Parameters
     ----------
     agent_type : str
         The node type for which to build the model.
-    edge_types : Tuple[]
+    agent_edge_types : List[Tuple[str, str]]
         Edge types involving the node type.
     state : Mapping[str, Mapping[str, Sequence[str]]]
         The dictionary defining all nodes states.
@@ -32,7 +32,7 @@ class MultimodalGenerativeCVAE(nn.Module):
         True to use edges in encoding, False to not use them.
     use_maps : bool
         True to use map rasters in encoding, False to not use them.
-    config: Mapping[str, Any]
+    config : Mapping[str, Any]
         A mapping describing the architecture of the multimodal generative
         CVAE. The configuration keys are the following:
 
@@ -74,7 +74,7 @@ class MultimodalGenerativeCVAE(nn.Module):
     def __init__(
             self,
             agent_type: str,
-            agent_edge_types,
+            agent_edge_types: List[Tuple[str, str]],
             state: Mapping[str, Mapping[str, Sequence[str]]],
             len_state: int,
             pred_state: Mapping[str, Mapping[str, Sequence[str]]],
@@ -206,9 +206,7 @@ class MultimodalGenerativeCVAE(nn.Module):
         # Encode the data
         x, y = self.encoder(
             first_timesteps,
-            inputs,
             inputs_st,
-            labels,
             labels_st,
             neighbors_data_st,
             neighbors_edge_value,
@@ -219,19 +217,13 @@ class MultimodalGenerativeCVAE(nn.Module):
         # Generate the latent variable
         z = self.latent(x, y, n_samples)
 
-        # Select the
+        # Select the right distribution
         if is_predicting:
-            dist = self.self.latent.p
+            dist = self.latent.p
             n_components = self.latent.p.n_components
         else:
             dist = self.latent.q
             n_components = self.latent.q.n_components
-
-        # Possibly force the number of samples, depending on the stage
-        # if not is_predicting:
-        #     n_samples = 1
-        # elif self.latent.p.mode == Mode.ALL_Z:
-        #     n_samples = self.latent.k ** self.latent.n
 
         # Take the last node history state as the current state
         x_t0 = inputs_st[:, -1]

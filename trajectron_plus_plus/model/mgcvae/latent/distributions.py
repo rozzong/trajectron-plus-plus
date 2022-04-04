@@ -14,7 +14,7 @@ class LatentDistribution(ABC, td.OneHotCategorical):
             self,
             probs: Optional[torch.Tensor] = None,
             logits: Optional[torch.Tensor] = None,
-            validate_args=None
+            validate_args=False
     ):
         super().__init__(probs, logits, validate_args)
 

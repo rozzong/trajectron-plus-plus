@@ -34,7 +34,11 @@ class GMM2D(td.Distribution):
     :param clip_hi: Clips the upper end of the standard deviation.
     """
     def __init__(self, log_pis, mus, log_sigmas, corrs):
-        super(GMM2D, self).__init__(batch_shape=log_pis.shape[0], event_shape=log_pis.shape[1:])
+        super(GMM2D, self).__init__(
+            batch_shape=log_pis.shape[0],
+            event_shape=log_pis.shape[1:],
+            validate_args=False
+        )
         self.components = log_pis.shape[-1]
         self.dimensions = 2
         self.device = log_pis.device

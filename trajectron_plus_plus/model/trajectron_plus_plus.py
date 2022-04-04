@@ -183,11 +183,6 @@ class TrajectronPlusPlus(nn.Module):
             n_samples: int = 1,
             gmm_mode: bool = False
     ) -> Tuple[Dict[str, "GMM2D"], Dict[str, torch.Tensor]]:
-        # Restore neighbors data if needed
-        device = inputs_st.device
-        neighbors_data_st = restore(neighbors_data_st)
-        neighbors_edge_value = restore(neighbors_edge_value)
-
         # Identify the agent type of the batch
         agent_type = self.get_agent_type(neighbors_data_st)
 
