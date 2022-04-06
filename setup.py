@@ -24,5 +24,5 @@ setup(
     url="https://github.com/rozzong/trajectron-plus-plus",
     packages=find_packages(),
     install_requires=required,
-    python_requires=">=3.8.0",
+    python_requires=">=3.6.9",
 )
