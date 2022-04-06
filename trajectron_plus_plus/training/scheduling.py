@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TypeVar, final
+from typing import TypeVar
 
 from numpy import exp
 
@@ -33,7 +33,6 @@ class Scheduler(ABC):
         self._i_step = 0
         self._value = self._rule(self._i_step)
 
-    @final
     def step(self) -> None:
         if self._i_step is None:
             self.reset()
