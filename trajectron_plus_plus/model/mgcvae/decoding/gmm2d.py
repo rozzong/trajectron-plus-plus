@@ -39,24 +39,36 @@ class GMM2D(td.Distribution):
             event_shape=log_pis.shape[1:],
             validate_args=False
         )
+
         self.components = log_pis.shape[-1]
         self.dimensions = 2
         self.device = log_pis.device
 
         log_pis = torch.clamp(log_pis, min=-1e5)
         self.log_pis = log_pis - torch.logsumexp(log_pis, dim=-1, keepdim=True)  # [..., N]
-        self.mus = self.reshape_to_components(mus)         # [..., N, 2]
+        self.mus = self.reshape_to_components(mus)  # [..., N, 2]
         self.log_sigmas = self.reshape_to_components(log_sigmas)  # [..., N, 2]
-        self.sigmas = torch.exp(self.log_sigmas)                       # [..., N, 2]
-        self.one_minus_rho2 = 1 - corrs**2                        # [..., N]
+        self.sigmas = torch.exp(self.log_sigmas)  # [..., N, 2]
+        self.one_minus_rho2 = 1 - corrs**2  # [..., N]
         self.one_minus_rho2 = torch.clamp(self.one_minus_rho2, min=1e-5, max=1)  # otherwise log can be nan
         self.corrs = corrs  # [..., N]
 
-        self.L = torch.stack([torch.stack([self.sigmas[..., 0], torch.zeros_like(self.log_pis)], dim=-1),
-                              torch.stack([self.sigmas[..., 1] * self.corrs,
-                                           self.sigmas[..., 1] * torch.sqrt(self.one_minus_rho2)],
-                                          dim=-1)],
-                             dim=-2)
+        self.L = torch.stack(
+            [
+                torch.stack(
+                    [self.sigmas[..., 0], torch.zeros_like(self.log_pis)],
+                    dim=-1
+                ),
+                torch.stack(
+                    [
+                        self.sigmas[..., 1] * self.corrs, self.sigmas[..., 1]
+                        * torch.sqrt(self.one_minus_rho2)
+                    ],
+                    dim=-1
+                )
+            ],
+            dim=-2
+        )
 
         self.pis_cat_dist = td.Categorical(logits=log_pis)
 
@@ -68,6 +80,7 @@ class GMM2D(td.Distribution):
         sigmas = torch.stack([torch.sqrt(sigma_1), torch.sqrt(sigma_2)], dim=-1)
         log_sigmas = torch.log(sigmas)
         corrs = corrs_sigma12 / (torch.prod(sigmas, dim=-1))
+
         return cls(log_pis, mus, log_sigmas, corrs)
 
     def rsample(self, sample_shape=torch.Size()):
@@ -79,16 +92,26 @@ class GMM2D(td.Distribution):
         :param sample_shape: Shape of the samples
         :return: Samples from the GMM.
         """
-        mvn_samples = (self.mus +
-                       torch.squeeze(
-                           torch.matmul(self.L,
-                                        torch.unsqueeze(
-                                            torch.randn(size=sample_shape + self.mus.shape, device=self.device),
-                                            dim=-1)
-                                        ),
-                           dim=-1))
+        mvn_samples = (
+            self.mus + torch.squeeze(
+                torch.matmul(
+                    self.L,
+                    torch.unsqueeze(
+                        torch.randn(
+                            size=sample_shape + self.mus.shape,
+                            device=self.device
+                        ),
+                        dim=-1
+                    )
+                ),
+                dim=-1
+            )
+        )
         component_cat_samples = self.pis_cat_dist.sample(sample_shape)
-        selector = torch.unsqueeze(to_one_hot(component_cat_samples, self.components), dim=-1)
+        selector = torch.unsqueeze(
+            to_one_hot(component_cat_samples, self.components),
+            dim=-1
+        )
         return torch.sum(mvn_samples*selector, dim=-2)
 
     def log_prob(self, value):
@@ -105,22 +128,33 @@ class GMM2D(td.Distribution):
         :return: Log probability
         """
         # x: [..., 2]
-        value = torch.unsqueeze(value, dim=-2)       # [..., 1, 2]
-        dx = value - self.mus                       # [..., N, 2]
+        value = torch.unsqueeze(value, dim=-2)  # [..., 1, 2]
+        dx = value - self.mus  # [..., N, 2]
 
-        exp_nominator = ((torch.sum((dx/self.sigmas)**2, dim=-1)  # first and second term of exp nominator
-                          - 2*self.corrs*torch.prod(dx, dim=-1)/torch.prod(self.sigmas, dim=-1)))    # [..., N]
+        exp_nominator = (
+            (
+                torch.sum((dx/self.sigmas)**2, dim=-1)  # first and second term of exp nominator
+                - 2 * self.corrs*torch.prod(dx, dim=-1)
+                / torch.prod(self.sigmas, dim=-1)
+            )
+        )  # [..., N]
 
-        component_log_p = -(2*np.log(2*np.pi)
-                            + torch.log(self.one_minus_rho2)
-                            + 2*torch.sum(self.log_sigmas, dim=-1)
-                            + exp_nominator/self.one_minus_rho2) / 2
+        component_log_p = -(
+            2*np.log(2*np.pi)
+            + torch.log(self.one_minus_rho2)
+            + 2*torch.sum(self.log_sigmas, dim=-1)
+            + exp_nominator/self.one_minus_rho2
+        ) / 2
 
         return torch.logsumexp(self.log_pis + component_log_p, dim=-1)
 
     def get_for_node_at_time(self, n, t):
-        return self.__class__(self.log_pis[:, n:n+1, t:t+1], self.mus[:, n:n+1, t:t+1],
-                              self.log_sigmas[:, n:n+1, t:t+1], self.corrs[:, n:n+1, t:t+1])
+        return self.__class__(
+            self.log_pis[:, n:n+1, t:t+1],
+            self.mus[:, n:n+1, t:t+1],
+            self.log_sigmas[:, n:n+1, t:t+1],
+            self.corrs[:, n:n+1, t:t+1]
+        )
 
     def mode(self):
         """
@@ -141,9 +175,15 @@ class GMM2D(td.Distribution):
                     x_max = self.mus[:, n, t, :, 0].max()
                     y_min = self.mus[:, n, t, :, 1].min()
                     y_max = self.mus[:, n, t, :, 1].max()
-                    search_grid = torch.stack(torch.meshgrid([torch.arange(x_min, x_max, 0.01),
-                                                              torch.arange(y_min, y_max, 0.01)]), dim=2
-                                              ).view(-1, 2).float().to(self.device)
+                    search_grid = torch.stack(
+                        torch.meshgrid(
+                            [
+                                torch.arange(x_min, x_max, 0.01),
+                                torch.arange(y_min, y_max, 0.01)
+                            ]
+                        ),
+                        dim=2
+                    ).view(-1, 2).float().to(self.device)
 
                     ll_score = nt_gmm.log_prob(search_grid)
                     argmax = torch.argmax(ll_score.squeeze(), dim=0)
@@ -155,11 +195,16 @@ class GMM2D(td.Distribution):
     def reshape_to_components(self, tensor):
         if len(tensor.shape) == 5:
             return tensor
-        return torch.reshape(tensor, list(tensor.shape[:-1]) + [self.components, self.dimensions])
+        return torch.reshape(
+            tensor,
+            list(tensor.shape[:-1]) + [self.components, self.dimensions]
+        )
 
     def get_covariance_matrix(self):
         cov = self.corrs * torch.prod(self.sigmas, dim=-1)
-        E = torch.stack([torch.stack([self.sigmas[..., 0]**2, cov], dim=-1),
-                         torch.stack([cov, self.sigmas[..., 1]**2], dim=-1)],
-                        dim=-2)
-        return E
+        return torch.stack(
+            [
+                torch.stack([self.sigmas[..., 0]**2, cov], dim=-1),
+                torch.stack([cov, self.sigmas[..., 1]**2], dim=-1)
+            ], dim=-2
+        )

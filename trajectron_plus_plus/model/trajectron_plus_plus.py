@@ -12,7 +12,11 @@ from ..misc import check_if_original, convert_state_dict
 
 
 class TrajectronPlusPlus(nn.Module):
-    """
+    """Trajectron++
+
+    A PyTorch implementation of the Trajectron++ model, introduced by Salzmann
+    et al. [1].
+
     Parameters
     ---------
     agent_types : Sequence[str]
@@ -22,13 +26,20 @@ class TrajectronPlusPlus(nn.Module):
     pred_state : Mapping[str, Mapping[str, Sequence[str]]]
         The prediction state structures for different agent types.
     include_robot : bool
-
+        If True, encode and use planned robot trajectories.
     use_edges : bool
-
+        If True, encode and use edges between graph nodes (i.e. agents).
     use_maps : bool
-
+        If True, encode and use maps.
     config : Mapping[str, Any]
+        The configuration to use to build the model.
 
+    References
+    ----------
+    [1] Salzmann, Tim, Boris Ivanovic, Punarjay Chakravarty, and Marco Pavone.
+        "Trajectron++: Dynamically-feasible trajectory forecasting with
+        heterogeneous data." In European Conference on Computer Vision, pp.
+        683-700. Springer, Cham, 2020.
     """
 
     def __init__(
@@ -57,7 +68,7 @@ class TrajectronPlusPlus(nn.Module):
         self.edge_types = None
         self.len_state = None
         self.len_pred_state = None
-        self.robot_future_encoder: NodeFutureEncoder = None
+        self.robot_future_encoder: Optional[NodeFutureEncoder] = None
         self.node_models: nn.ModuleDict[str, MultimodalGenerativeCVAE] = None
 
         self._build()
@@ -141,7 +152,7 @@ class TrajectronPlusPlus(nn.Module):
 
     def load_state_dict(
             self,
-            state_dict: 'OrderedDict[str, Tensor]',
+            state_dict: "OrderedDict[str, Tensor]",
             strict: bool = True
     ) -> Tuple[List[str], List[str]]:
         # Convert the state dict to this implementation's format, if needed

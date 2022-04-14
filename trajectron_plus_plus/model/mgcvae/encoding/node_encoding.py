@@ -54,21 +54,24 @@ class NodeHistoryEncoder(NodeEncoder):
         )
         self.dropout = nn.Dropout(self.p)
 
-    def forward(self, history, first_timesteps):
+    def forward(
+            self,
+            history: torch.Tensor,
+            first_timesteps: torch.Tensor
+    ):
         outputs, _ = run_lstm_on_variable_length_seqs(
             self.lstm,
             history,
             first_timesteps
         )
         outputs = self.dropout(outputs)
-        last_timestep_per_seq = -(first_timesteps + 1)
-
-        res = outputs[
+        last_timesteps = -(first_timesteps + 1)
+        last_outputs = outputs[
             torch.arange(len(first_timesteps)),
-            last_timestep_per_seq
+            last_timesteps
         ]
 
-        return res
+        return last_outputs
 
 
 class NodeFutureEncoder(NodeEncoder):
@@ -119,7 +122,7 @@ class NodeFutureEncoder(NodeEncoder):
             )
 
         _, state = self.lstm(future, tuple(initial_state.values()))
-        state = unpack_rnn_state(state)  # 2 * num_layers * num_directions, hidden_size
+        state = unpack_rnn_state(state)
         state = self.dropout(state)
 
         return state

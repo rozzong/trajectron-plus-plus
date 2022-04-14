@@ -104,7 +104,7 @@ class PDistribution(LatentDistribution):
             self,
             probs: Optional[torch.Tensor] = None,
             logits: Optional[torch.Tensor] = None,
-            validate_args: Optional[torch.Tensor] = None,
+            validate_args=False,
             mode: Mode = Mode.MOST_LIKELY
     ):
         super().__init__(probs, logits, validate_args)

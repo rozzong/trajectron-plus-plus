@@ -4,10 +4,11 @@ import torch
 from torch import nn
 
 from .node_encoding import NodeHistoryEncoder, NodeFutureEncoder
-from .edge_state_encoding import ReducingEdgeStateEncoder
+from .edge_state_encoding import EdgeStateEncoder, ReducingEdgeStateEncoder
 from .map_encoding import CNNMapEncoder
-from .edge_influence_encoding import ReducingEdgeInfluenceEncoder, \
-    BiRNNEdgeInfluenceEncoder, AttentionEdgeInfluenceEncoder
+from .edge_influence_encoding import EdgeInfluenceEncoder, \
+    ReducingEdgeInfluenceEncoder, BiRNNEdgeInfluenceEncoder, \
+    AttentionEdgeInfluenceEncoder
 
 
 class MultimodalGenerativeCVAEEncoder(nn.Module):
@@ -55,9 +56,9 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
 
         self.node_history_encoder: Optional[NodeHistoryEncoder] = None
         self.node_future_encoder: Optional[NodeFutureEncoder] = None
-        self.edge_influence_encoder: Optional["EdgeInfluenceEncoder"] = None
+        self.edge_influence_encoder: Optional[EdgeInfluenceEncoder] = None
         self.edge_state_encoders: Optional[
-            nn.ModuleDict[tuple, "EdgeStateEncoder"]
+            nn.ModuleDict[tuple, EdgeStateEncoder]
         ] = None
         self.map_encoder: Optional[CNNMapEncoder] = None
 
@@ -259,7 +260,8 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
 
         # Encode the map, if asked
         if self.use_maps and maps is not None:
-            encoded_maps = self.map_encoder(maps * 2 - 1.)
+            scaled_maps = (maps * 2 / 255) - 1
+            encoded_maps = self.map_encoder(scaled_maps)
             x_list.append(encoded_maps)
 
         # Concatenate encoded data

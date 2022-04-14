@@ -88,8 +88,8 @@ def _decoder_mapping(agent_type: str) -> dict:
         f"{agent_type}/decoder/proj_to_GMM_mus.bias": f"node_models.{agent_type}.decoder.proj_to_gmm.mus.bias",
         f"{agent_type}/decoder/proj_to_GMM_log_sigmas.weight": f"node_models.{agent_type}.decoder.proj_to_gmm.log_sigmas.weight",
         f"{agent_type}/decoder/proj_to_GMM_log_sigmas.bias": f"node_models.{agent_type}.decoder.proj_to_gmm.log_sigmas.bias",
-        f"{agent_type}/decoder/proj_to_GMM_corrs.weight": f"node_models.{agent_type}.decoder.proj_to_gmm.corrs.weight",
-        f"{agent_type}/decoder/proj_to_GMM_corrs.bias": f"node_models.{agent_type}.decoder.proj_to_gmm.corrs.bias",
+        f"{agent_type}/decoder/proj_to_GMM_corrs.weight": f"node_models.{agent_type}.decoder.proj_to_gmm.corrs.0.weight",
+        f"{agent_type}/decoder/proj_to_GMM_corrs.bias": f"node_models.{agent_type}.decoder.proj_to_gmm.corrs.0.bias",
         f"{agent_type}/unicycle_initializer.weight": f"node_models.{agent_type}.decoder.dynamical_model.p0_model.weight",
         f"{agent_type}/unicycle_initializer.bias": f"node_models.{agent_type}.decoder.dynamical_model.p0_model.bias"
     }
@@ -135,7 +135,7 @@ def check_if_original(state_dict: dict) -> bool:
         True if the state dictionary matches the original Trajectron++
         structure, else False
     """
-    # Assume a "/" in dictionary keys means the dictionarty is original
+    # Assume a "/" in dictionary keys means the dictionary is original
     return any(["/" in key for key in state_dict])
 
 

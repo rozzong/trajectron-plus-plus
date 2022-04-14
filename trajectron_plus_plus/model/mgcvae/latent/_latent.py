@@ -51,11 +51,11 @@ class DiscreteLatent(nn.Module):
 
     @property
     def z_logit_clip(self) -> Union[float, None]:
-        return self._z_logit_clip
+        return self._z_logit_clip if self.training else None
 
     @z_logit_clip.setter
     def z_logit_clip(self, value: Union[float, None]):
-        self._z_logit_clip = value if self.training else None
+        self._z_logit_clip = value
 
     @property
     def z_size(self) -> int:

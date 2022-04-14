@@ -71,9 +71,12 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
             self.rnn_dim,
             self.n_gmm_components * self.len_pred_state
         )
-        self.proj_to_gmm["corrs"] = nn.Linear(
-            self.rnn_dim,
-            self.n_gmm_components
+        self.proj_to_gmm["corrs"] = nn.Sequential(
+            nn.Linear(
+                self.rnn_dim,
+                self.n_gmm_components,
+            ),
+            nn.Tanh()
         )
 
         # Instantiate the dynamical model

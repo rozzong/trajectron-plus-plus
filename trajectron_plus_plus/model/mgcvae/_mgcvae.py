@@ -1,5 +1,5 @@
 from inspect import stack
-from typing import Any, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import torch
 import torch.nn as nn
@@ -21,11 +21,11 @@ class MultimodalGenerativeCVAE(nn.Module):
     state : Mapping[str, Mapping[str, Sequence[str]]]
         The dictionary defining all nodes states.
     len_state : int
-
+        The number of elements in the agent state.
     pred_state : Mapping[str, Mapping[str, Sequence[str]]]
         The dictionary defining all nodes states to be predicted.
     len_pred_state : int
-
+        The number of elements in the agent prediction state.
     include_robot : bool
         True to include the ego-agent's future, False to not include it.
     use_edges : bool
@@ -36,39 +36,45 @@ class MultimodalGenerativeCVAE(nn.Module):
         A mapping describing the architecture of the multimodal generative
         CVAE. The configuration keys are the following:
 
-            "encoder"
-                "history_dim"
-                "future_dim"
-                "p_dropout"
-                "edge_state_dim"
-                "edge_state_combine_method"
-                "edge_influence_dim"
-                "edge_influence_combine_method"
-                "use_dynamic_edges"
-                "map_encoder_config"
-                    "map_channels"
-                    "hidden_channels"
-                    "output_size"
-                    "masks"
-                    "strides"
-                    "patch_size"
-                    "p_dropout"
-            "latent"
-                "n"
-                "k"
-                "p_z_x_mlp_dim"
-                "q_z_xy_mlp_dim"
-                "p_dropout"
-                "kl_min"
-            "decoder"
-                "rnn_dim"
-                "n_gmm_components"
-                "dynamical_model"
-                    <agent_type>
-                        "type"
-                        "distribution"
-                        "limits"
+            encoder:
+                history_dim: int
+                future_dim: int
+                edge_state_dim: int
+                edge_state_combine_method: str
+                edge_influence_dim: int
+                edge_influence_combine_method: str
+                p_dropout: float
+                use_dynamic_edges: bool
+                map_encoder:
+                    <agent_type>:
+                        heading_state_index: int
+                        map_channels: int
+                        hidden_channels: List[int]
+                        output_size: int
+                        masks: List[int]
+                        strides: List[int]
+                        patch_size: Tuple[int, int, int, int]
+                        p_dropout: float
                     ...
+            latent:
+                n: int
+                k: int
+                p_z_x_mlp_dim: Optional[int]
+                q_z_xy_mlp_dim: Optional[int]
+                p_dropout: float
+                kl_min: float
+            decoder:
+                rnn_dim: int
+                n_gmm_components: int
+                dynamical_model:
+                    <agent_type>:
+                        type: str
+                        use_distribution: bool
+                        kwargs: Mapping[str, Any]
+                    ...
+
+    len_state_robot : Optional[int]
+        The number of elements in the ego-agent state.
     """
 
     def __init__(
@@ -92,7 +98,7 @@ class MultimodalGenerativeCVAE(nn.Module):
         self._use_maps = use_maps
 
         self.agent_type = agent_type
-        self.agent_edge_types = agent_edge_types  # [(this_node_type, node_type_0), ...]
+        self.agent_edge_types = agent_edge_types
         self.state = state
         self.len_state = len_state
         self.pred_state = pred_state
@@ -168,7 +174,7 @@ class MultimodalGenerativeCVAE(nn.Module):
             self.config["latent"]["p_z_x_mlp_dim"],
             self.config["latent"]["q_z_xy_mlp_dim"],
             self.config["latent"]["p_dropout"],
-            self.config["latent"].get("k_min")
+            self.config["latent"].get("kl_min")
         )
         self.decoder = MultimodalGenerativeCVAEDecoder(
             self.agent_type,
@@ -185,16 +191,16 @@ class MultimodalGenerativeCVAE(nn.Module):
 
     def forward(
             self,
-            first_timesteps,
+            first_timesteps: torch.Tensor,
             inputs: torch.Tensor,
             inputs_st: torch.Tensor,
             labels: Optional[torch.Tensor],
             labels_st: Optional[torch.Tensor],
-            neighbors_data_st,
-            neighbors_edge_value,
-            robot_future_st,
-            encoded_robot_future: torch.Tensor,
-            maps: torch.Tensor,
+            neighbors_data_st: Dict[Tuple[str, str], List[torch.Tensor]],
+            neighbors_edge_value: Dict[Tuple[str, str], List[torch.Tensor]],
+            robot_future_st: Optional[torch.Tensor],
+            encoded_robot_future: Optional[torch.Tensor],
+            maps: Optional[torch.Tensor],
             prediction_horizon: int,
             n_samples: int = 1,
             gmm_mode: bool = False
@@ -213,6 +219,10 @@ class MultimodalGenerativeCVAE(nn.Module):
             encoded_robot_future,
             maps,
         )
+
+        # Override the number of samples during training
+        if not is_predicting:
+            n_samples = 1
 
         # Generate the latent variable
         z = self.latent(x, y, n_samples)
