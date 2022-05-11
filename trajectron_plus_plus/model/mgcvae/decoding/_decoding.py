@@ -221,4 +221,7 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
         a_sample = a_dist.mode() if gmm_mode else a_dist.rsample()
         preds = self.dynamical_model.integrate_samples(a_sample, x)
 
+        # Put the batch first
+        preds = preds.permute(1, 0, 2, 3)
+
         return y_dist, preds

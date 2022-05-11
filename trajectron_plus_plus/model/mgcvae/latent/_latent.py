@@ -102,7 +102,7 @@ class DiscreteLatent(nn.Module):
             x: torch.Tensor,
             y: Optional[torch.Tensor] = None,
             n_samples: int = 1,
-            mode: Optional[Mode] = None
+            mode: Mode = Mode.MOST_LIKELY
     ):
         # If no label is provided, the model is assumed to be used for
         # prediction
@@ -117,7 +117,7 @@ class DiscreteLatent(nn.Module):
         if self.training:
             z = self.q.sample_n(n_samples)
         else:
-            self.p.mode = mode if mode is not None else Mode.FULL
+            self.p.mode = mode
             z = self.p.sample_n(n_samples)
 
         return z

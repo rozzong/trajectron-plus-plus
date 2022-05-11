@@ -125,7 +125,7 @@ class PDistribution(LatentDistribution):
         return self._mode
 
     @mode.setter
-    def mode(self, value):
+    def mode(self, value: Mode):
         self._mode = value
 
     def sample_n(self, n):

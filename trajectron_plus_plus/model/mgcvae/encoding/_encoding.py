@@ -204,7 +204,7 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
 
     def forward(
             self,
-            first_timesteps,
+            first_timesteps: torch.Tensor,
             inputs_st: torch.Tensor,
             labels_st: Optional[torch.Tensor] = None,
             neighbors_data_st: Optional[torch.Tensor] = None,

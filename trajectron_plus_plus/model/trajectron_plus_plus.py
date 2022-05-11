@@ -7,6 +7,7 @@ import torch.nn as nn
 
 from .mgcvae import MultimodalGenerativeCVAE
 from .mgcvae.encoding import NodeFutureEncoder
+from .mgcvae.latent import Mode
 from ..data import restore
 from ..misc import check_if_original, convert_state_dict
 
@@ -18,7 +19,7 @@ class TrajectronPlusPlus(nn.Module):
     et al. [1].
 
     Parameters
-    ---------
+    ----------
     agent_types : Sequence[str]
         Node types to create MGCVAE models for.
     state : Mapping[str, Mapping[str, Sequence[str]]]
@@ -36,7 +37,7 @@ class TrajectronPlusPlus(nn.Module):
 
     References
     ----------
-    [1] Salzmann, Tim, Boris Ivanovic, Punarjay Chakravarty, and Marco Pavone.
+    [1] Tim Salzmann, Boris Ivanovic, Punarjay Chakravarty, and Marco Pavone.
         "Trajectron++: Dynamically-feasible trajectory forecasting with
         heterogeneous data." In European Conference on Computer Vision, pp.
         683-700. Springer, Cham, 2020.
@@ -192,6 +193,7 @@ class TrajectronPlusPlus(nn.Module):
             maps: Optional[torch.Tensor],
             prediction_horizon: int,
             n_samples: int = 1,
+            mode: Optional[Mode] = None,
             gmm_mode: bool = False
     ) -> Tuple[Dict[str, "GMM2D"], Dict[str, torch.Tensor]]:
         # Identify the agent type of the batch
@@ -216,6 +218,7 @@ class TrajectronPlusPlus(nn.Module):
             maps,
             prediction_horizon,
             n_samples,
+            mode,
             gmm_mode
         )
 

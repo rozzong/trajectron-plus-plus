@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from .encoding import MultimodalGenerativeCVAEEncoder
-from .latent import DiscreteLatent
+from .latent import DiscreteLatent, Mode
 from .decoding import MultimodalGenerativeCVAEDecoder
 
 
@@ -159,6 +159,7 @@ class MultimodalGenerativeCVAE(nn.Module):
             self.config["encoder"]["history_dim"],
             self.config["encoder"]["future_dim"],
             self.config["encoder"]["p_dropout"],
+            #self.config["encoder"]["node_state_attention"],
             self.config["encoder"]["edge_state_dim"],
             self.config["encoder"]["edge_state_combine_method"],
             self.config["encoder"]["edge_influence_dim"],
@@ -203,6 +204,7 @@ class MultimodalGenerativeCVAE(nn.Module):
             maps: Optional[torch.Tensor],
             prediction_horizon: int,
             n_samples: int = 1,
+            mode: Optional[Mode] = None,
             gmm_mode: bool = False
     ):
         # If no label is provided, the model is assumed to be used for
@@ -225,7 +227,7 @@ class MultimodalGenerativeCVAE(nn.Module):
             n_samples = 1
 
         # Generate the latent variable
-        z = self.latent(x, y, n_samples)
+        z = self.latent(x, y, n_samples, mode)
 
         # Select the right distribution
         if is_predicting:
