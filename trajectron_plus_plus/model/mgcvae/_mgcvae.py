@@ -66,6 +66,7 @@ class MultimodalGenerativeCVAE(nn.Module):
             decoder:
                 rnn_dim: int
                 n_gmm_components: int
+                use_state_attention: bool
                 dynamical_model:
                     <agent_type>:
                         type: str
@@ -159,7 +160,6 @@ class MultimodalGenerativeCVAE(nn.Module):
             self.config["encoder"]["history_dim"],
             self.config["encoder"]["future_dim"],
             self.config["encoder"]["p_dropout"],
-            #self.config["encoder"]["node_state_attention"],
             self.config["encoder"]["edge_state_dim"],
             self.config["encoder"]["edge_state_combine_method"],
             self.config["encoder"]["edge_influence_dim"],
@@ -186,6 +186,7 @@ class MultimodalGenerativeCVAE(nn.Module):
             self.latent.z_size,
             self.config["decoder"]["rnn_dim"],
             self.config["decoder"]["n_gmm_components"],
+            self.config["decoder"]["use_state_attention"],
             self.config["decoder"]["dynamical_model"][self.agent_type],
             self.len_state_robot
         )
@@ -240,7 +241,7 @@ class MultimodalGenerativeCVAE(nn.Module):
         # Take the last node history state as the current state
         x_t0 = inputs_st[:, -1]
 
-        # If robot states are available, extract thr current and future ones
+        # If robot states are available, extract the current and future ones
         if encoded_robot_future is not None:
             x_r_t0 = robot_future_st[..., 0, :]
             y_r = robot_future_st[..., 1:, :]

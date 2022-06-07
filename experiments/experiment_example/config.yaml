@@ -121,6 +121,7 @@ model:
         decoder:
             rnn_dim: 128
             n_gmm_components: 1
+            use_state_attention: True
             dynamical_model:
                 vehicle:
                     type: Unicycle

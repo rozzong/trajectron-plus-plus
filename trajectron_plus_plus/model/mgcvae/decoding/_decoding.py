@@ -5,6 +5,7 @@ from torch import nn
 
 from . import dynamics
 from .gmm2d import GMM2D
+from .state_attention import StateAttention
 from ..latent.distributions import PDistribution
 
 
@@ -20,6 +21,7 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
             z_size: int,
             rnn_dim: int,
             n_gmm_components: int,
+            use_state_attention: bool,
             dynamical_model_config: Mapping[str, Any],
             len_state_robot: Optional[int] = None,
     ):
@@ -34,6 +36,7 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
         self.z_size = z_size
         self.rnn_dim = rnn_dim
         self.n_gmm_components = n_gmm_components
+        self.use_state_attention = use_state_attention
         self.dynamical_model_config = dynamical_model_config
         self.len_state_robot = len_state_robot
 
@@ -44,10 +47,10 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
         return self._include_robot
 
     @include_robot.setter
-    def include_robot(self, value: bool):
+    def include_robot(self, value: bool) -> None:
         self._include_robot = value
 
-    def _build(self):
+    def _build(self) -> None:
         # Build the RNN
         input_size = self.len_pred_state + self.z_size + self.x_size
         if self.include_robot:
@@ -57,23 +60,30 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
         self.rnn_cell = nn.GRUCell(input_size, self.rnn_dim)
         self.initial_h = nn.Linear(self.z_size + self.x_size, self.rnn_dim)
 
+        # Add state attention, if asked
+        if self.use_state_attention:
+            self.state_attention = StateAttention(
+                self.x_size,
+                self.rnn_dim
+            )
+
         # Build the GMM parameters models
         self.proj_to_gmm = nn.ModuleDict()
         self.proj_to_gmm["log_pis"] = nn.Linear(
-            self.rnn_dim,
+            self.rnn_dim + int(self.use_state_attention) * self.x_size,
             self.n_gmm_components
         )
         self.proj_to_gmm["mus"] = nn.Linear(
-            self.rnn_dim,
+            self.rnn_dim + int(self.use_state_attention) * self.x_size,
             self.n_gmm_components * self.len_pred_state
         )
         self.proj_to_gmm["log_sigmas"] = nn.Linear(
-            self.rnn_dim,
+            self.rnn_dim + int(self.use_state_attention) * self.x_size,
             self.n_gmm_components * self.len_pred_state
         )
         self.proj_to_gmm["corrs"] = nn.Sequential(
             nn.Linear(
-                self.rnn_dim,
+                self.rnn_dim + int(self.use_state_attention) * self.x_size,
                 self.n_gmm_components,
             ),
             nn.Tanh()
@@ -111,10 +121,13 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
             n_components: int = 1,
             gmm_mode: bool = False
     ):
+        # Compute the batch size
+        batch_size = len(x)
+
         # Check if the data is being decoded for predicting
         is_predicting = isinstance(dist, PDistribution)
 
-        # Add the input to
+        # Concatenate the input encodings and the latent variable
         z = torch.reshape(z_stacked, (-1, self.z_size))
         zx = torch.cat([z, x.repeat(n_samples * n_components, 1)], dim=1)
 
@@ -133,9 +146,16 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
 
         for t_f in range(prediction_horizon):
             state = self.rnn_cell(inputs, state)
+            
+            # Compute state attention, if asked
+            if self.use_state_attention:
+                contexts = self.state_attention(x, state, batch_size)
+                cat_state = torch.cat((state, contexts), dim=-1)
+            else:
+                cat_state = state
 
             # Create a Gaussian mixture model
-            gmm_params = self.project_to_gmm_params(state)
+            gmm_params = self.project_to_gmm_params(cat_state)
             gmm = GMM2D(**gmm_params)
 
             a_t = gmm.mode() if is_predicting and gmm_mode else gmm.rsample()
