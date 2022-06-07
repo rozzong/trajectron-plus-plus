@@ -215,7 +215,6 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
         batch_size = len(inputs_st)
         is_predicting = labels_st is None
 
-        x_list = []
         inputs_present_st = inputs_st[:, -1]
 
         # Encode the history
@@ -223,11 +222,6 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
             inputs_st,
             first_timesteps
         )
-        x_list.append(encoded_history)
-
-        # Include the future robot plans
-        if self.include_robot:
-            x_list.append(encoded_robot_future)
 
         # Encode the future
         y = self.node_future_encoder(
@@ -256,15 +250,23 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
                 batch_size
             )
 
-            x_list.append(encoded_edge_influence)
-
         # Encode the map, if asked
-        if self.use_maps and maps is not None:
+        encode_maps = self.use_maps and maps is not None
+        if encode_maps:
             scaled_maps = (maps * 2 / 255) - 1
             encoded_maps = self.map_encoder(scaled_maps)
+
+        # Concatenate encoded data, in the same order as in the original
+        # implementation for the sake of retro compatibility
+        x_list = []
+        if self.use_edges:
+            x_list.append(encoded_edge_influence)
+        x_list.append(encoded_history)
+        if self.include_robot:
+            x_list.append(encoded_robot_future)
+        if encode_maps:
             x_list.append(encoded_maps)
 
-        # Concatenate encoded data
         x = torch.cat(x_list, dim=1)
 
         return x, y

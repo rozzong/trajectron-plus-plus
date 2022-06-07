@@ -171,10 +171,10 @@ class GMM2D(td.Distribution):
                 mode_t_list = []
                 for t in range(time):
                     nt_gmm = self.get_for_node_at_time(n, t)
-                    x_min = self.mus[:, n, t, :, 0].min()
-                    x_max = self.mus[:, n, t, :, 0].max()
-                    y_min = self.mus[:, n, t, :, 1].min()
-                    y_max = self.mus[:, n, t, :, 1].max()
+                    x_min = self.mus[:, n, t, :, 0].min().item()
+                    x_max = self.mus[:, n, t, :, 0].max().item()
+                    y_min = self.mus[:, n, t, :, 1].min().item()
+                    y_max = self.mus[:, n, t, :, 1].max().item()
                     search_grid = torch.stack(
                         torch.meshgrid(
                             [

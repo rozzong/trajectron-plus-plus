@@ -4,6 +4,8 @@ import numpy as np
 from torch.utils.data import IterableDataset
 
 from .preprocessing import get_node_timestep_data
+from .node_type import NodeType
+from .scene import Scene
 
 
 class NodeTypeIterableDataset(IterableDataset):
@@ -13,9 +15,9 @@ class NodeTypeIterableDataset(IterableDataset):
     ----------
     scenes : Iterable[Scene]
         Scenes to iterate over.
-    node_type : trajectron.environment.node_type.NodeType
+    node_type : NodeType
         Node type to build the dataset for.
-    edge_types : List[Tuple["NodeType", "NodeType"]]
+    edge_types : List[Tuple[NodeType, NodeType]]
         The list of all edge types to take into account when processing the
         node's neighbours.
     include_robot : bool
@@ -42,10 +44,10 @@ class NodeTypeIterableDataset(IterableDataset):
         The dictionary defining all nodes states to be predicted.
     hyperparams : Mapping[str, Any]
         Model hyperparameters.
-    scene_multiplier : int, default: 1
-        The number of times to iterate over each scene.
-    node_multiplier : int, default: 1
-        The number of times to iterate over each node in a scene.
+    scene_multiplier : bool, default: False
+        Whether to use scene multiplication or not.
+    node_multiplier : bool, default: False
+        Whether to use node multiplication or not.
     edge_addition_filter : Optional[List[float]], default: None
 
     edge_removal_filter : Optional[List[float]], default: None
@@ -54,21 +56,21 @@ class NodeTypeIterableDataset(IterableDataset):
 
     def __init__(
             self,
-            scenes: Iterable["Scene"],
-            node_type: "NodeType",
-            edge_types: List[Tuple["NodeType", "NodeType"]],
+            scenes: Iterable[Scene],
+            node_type: NodeType,
+            edge_types: List[Tuple[NodeType, NodeType]],
             include_robot: bool,
             min_len_history: int,
             max_len_history: int,
             min_len_future: int,
             max_len_future: int,
             standardization_params: Dict[str, Dict[str, Tuple[np.ndarray, np.ndarray]]],
-            attention_radius: Dict[Tuple["NodeType", "NodeType"], float],
+            attention_radius: Dict[Tuple[NodeType, NodeType], float],
             state: Dict[str, Dict[str, List[str]]],
             pred_state: Dict[str, Dict[str, List[str]]],
             hyperparams: Mapping[str, Any],
-            scene_multiplier: int = 1,
-            node_multiplier: int = 1,
+            scene_multiplier: bool = False,
+            node_multiplier: bool = False,
             edge_addition_filter: Optional[List[float]] = None,
             edge_removal_filter: Optional[List[float]] = None,
     ):
@@ -100,9 +102,6 @@ class NodeTypeIterableDataset(IterableDataset):
             if edge_type[0] == self.node_type
         ]
 
-        # Compute the multiplier, assuming it is constant
-        self.multiplier = scene_multiplier * node_multiplier
-
     def __iter__(self):
         for scene in self.scenes:
             present_nodes_dict = scene.present_nodes(
@@ -112,27 +111,35 @@ class NodeTypeIterableDataset(IterableDataset):
                 min_future_timesteps=self.min_len_future,
                 return_robot=self.include_robot
             )
-            for timestep, nodes in present_nodes_dict.items():
-                scene_graph = scene.get_scene_graph(
-                    timestep,
-                    self.attention_radius,
-                    self.edge_addition_filter,
-                    self.edge_removal_filter
-                )
-                for node in nodes:
-                    yield from [
-                        get_node_timestep_data(
-                            scene,
-                            timestep,
-                            node,
-                            self.state,
-                            self.pred_state,
-                            self.edge_types,
-                            self.standardization_params,
-                            self.attention_radius,
-                            self.max_len_history,
-                            self.max_len_future,
-                            self.hyperparams,
-                            scene_graph
+            scene_multiplier = max(
+                1,
+                scene.frequency_multiplier * self.scene_multiplier
+            )
+            for _ in range(scene_multiplier):
+                for timestep, nodes in present_nodes_dict.items():
+                    scene_graph = scene.get_scene_graph(
+                        timestep,
+                        self.attention_radius,
+                        self.edge_addition_filter,
+                        self.edge_removal_filter
+                    )
+                    for node in nodes:
+                        yield from [
+                            get_node_timestep_data(
+                                scene,
+                                timestep,
+                                node,
+                                self.state,
+                                self.pred_state,
+                                self.edge_types,
+                                self.standardization_params,
+                                self.attention_radius,
+                                self.max_len_history,
+                                self.max_len_future,
+                                self.hyperparams,
+                                scene_graph
+                            )
+                        ] * max(
+                            1,
+                            node.frequency_multiplier * self.node_multiplier
                         )
-                    ] * self.multiplier

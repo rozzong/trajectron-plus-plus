@@ -148,7 +148,7 @@ class TrajectronPlusPlus(nn.Module):
                 self.use_edges,
                 self.use_maps,
                 self.config,
-                self.len_state[self.robot_agent_type]
+                self.len_state.get(self.robot_agent_type)
             )
 
     def load_state_dict(

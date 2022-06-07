@@ -283,7 +283,7 @@ def get_node_timestep_data(
     neighbors_data_st = None
     neighbors_edge_value = None
 
-    if hyperparams["use_edges"]:
+    if hyperparams["parameters"]["use_edges"]:
         neighbors_data_st = dict()
         neighbors_edge_value = dict()
 
@@ -292,8 +292,8 @@ def get_node_timestep_data(
             scene_graph = scene.get_scene_graph(
                 timestep,
                 attention_radius,
-                hyperparams["edge_addition_filter"],
-                hyperparams["edge_removal_filter"]
+                hyperparams["parameters"]["edge_addition_filter"],
+                hyperparams["parameters"]["edge_removal_filter"]
             )
 
         for edge_type in edge_types:
@@ -303,7 +303,7 @@ def get_node_timestep_data(
             # current timestep
             connected_nodes = scene_graph.get_neighbors(node, edge_type[1])
 
-            if hyperparams["encoder"]["use_dynamic_edges"] == True:
+            if hyperparams["architecture"]["encoder"]["use_dynamic_edges"]:
                 # Get the edge masks for the current node at the current timestep
                 edge_masks = torch.tensor(
                     scene_graph.get_edge_scaling(node),
@@ -341,7 +341,7 @@ def get_node_timestep_data(
     robot_traj_st_t = None
     timestep_range_r = np.array([timestep, timestep + max_ft])
 
-    if hyperparams["include_robot"]:
+    if hyperparams["parameters"]["include_robot"]:
         x_node = node.get(timestep_range_r, state[node.type])
         robot = scene.get_node_by_id(scene.non_aug_scene.robot.id) \
             if scene.non_aug_scene is not None \
@@ -364,14 +364,14 @@ def get_node_timestep_data(
 
     # Map
     map_tuple = None
-    if hyperparams["use_maps"]:
-        if node.type in hyperparams["encoder"]["map_encoder"]:
+    if hyperparams["parameters"]["use_maps"]:
+        if node.type in hyperparams["architecture"]["encoder"]["map_encoder"]:
             if node.non_aug_node is not None:
                 x = node.non_aug_node.get(
                     np.array([timestep]),
                     state[node.type]
                 )
-            me_hyp = hyperparams["encoder"]["map_encoder"][node.type]
+            me_hyp = hyperparams["architecture"]["encoder"]["map_encoder"][node.type]
             if "heading_state_index" in me_hyp:
                 heading_state_index = me_hyp["heading_state_index"]
                 # We have to rotate the map in the opposite direction of the
@@ -410,11 +410,11 @@ def get_timesteps_data(
         scene: "Scene",
         timesteps: np.ndarray,
         node_type: "NodeType",
-        state: Dict[str, Dict[str, List[str]]],
-        pred_state: Dict[str, Dict[str, List[str]]],
-        edge_types: List[Tuple["NodeType", "NodeType"]],
-        standardization_params: Dict[str, Dict[str, Tuple[np.ndarray, np.ndarray]]],
-        attention_radius: Dict[Tuple["NodeType", "NodeType"], float],
+        state: Mapping[str, Mapping[str, Sequence[str]]],
+        pred_state: Mapping[str, Mapping[str, Sequence[str]]],
+        edge_types: Sequence[Tuple["NodeType", "NodeType"]],
+        standardization_params: Mapping[str, Mapping[str, Tuple[np.ndarray, np.ndarray]]],
+        attention_radius: Mapping[Tuple["NodeType", "NodeType"], float],
         min_ht: int,
         max_ht: int,
         max_ft: int,
@@ -461,7 +461,7 @@ def get_timesteps_data(
         type=node_type,
         min_history_timesteps=min_ht,
         min_future_timesteps=max_ft,
-        return_robot=not hyperparams["incl_robot_node"]
+        return_robot=not hyperparams["parameters"]["include_robot"]
     )
 
     batch = list()

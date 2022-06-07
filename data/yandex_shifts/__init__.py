@@ -1,0 +1,1 @@
+from .yandex_shifts_scene_making import YandexShiftsSceneMaker

@@ -14,8 +14,7 @@ class Scheduler(ABC):
     """
 
     def __init__(self):
-        self._i_step = None
-        self._value = None
+        self._i_step = 0
 
     @property
     def i_step(self) -> int:
@@ -23,7 +22,7 @@ class Scheduler(ABC):
 
     @property
     def value(self) -> T:
-        return self._value
+        return self._rule(self._i_step)
 
     @abstractmethod
     def _rule(self, i_step: int) -> T:
@@ -31,14 +30,9 @@ class Scheduler(ABC):
 
     def reset(self) -> None:
         self._i_step = 0
-        self._value = self._rule(self._i_step)
 
     def step(self) -> None:
-        if self._i_step is None:
-            self.reset()
-        else:
-            self._i_step += 1
-            self._value = self._rule(self._i_step)
+        self._i_step += 1
 
 
 class ExponentialScheduler(Scheduler):
@@ -101,7 +95,7 @@ class SigmoidScheduler(Scheduler):
         self.steps_low_to_high = steps_low_to_high
 
     @staticmethod
-    def __sigmoid(x):
+    def __sigmoid(x: float) -> float:
         return 1 / (1 + exp(-x))
 
     def _rule(self, i_step: int) -> T:

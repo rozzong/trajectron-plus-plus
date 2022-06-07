@@ -1,0 +1,215 @@
+dataset:
+    name: yandex_shifts
+    dt: 0.2 # [s]
+    n_timesteps_per_scene: 50
+    agent_types:
+      - vehicle
+      - pedestrian
+    ego_agent_type: vehicle
+data_loading:
+    train:
+        data: train_pb
+        batch_size: 64
+        n_workers: 0
+        subset:
+            start: 0
+            stop: 2000
+    val:
+        data: train_pb
+        batch_size: 64
+        n_workers: 0
+        subset:
+            start: 2000
+            stop: 2300
+    test:
+        data: train_pb
+        batch_size: 64
+        n_workers: 0
+        subset:
+            start: 2300
+            stop: 2600
+model:
+    parameters:
+        include_robot: True
+        use_edges: True
+        use_maps: True
+        n_history_timesteps_min: 1
+        n_history_timesteps_max: 25
+        n_future_timesteps_min: 21
+        n_future_timesteps_max: 21
+        n_samples: 50
+        mode: null
+        gmm_mode: False
+        attention_radius:
+            vehicle:
+                vehicle: 30.0
+                pedestrian: 20.0
+            pedestrian:
+                vehicle: 20.0
+                pedestrian: 10.0
+        standardization:
+            vehicle:
+                position:
+                    x: {mean: 0, std: 80}
+                    y: {mean: 0, std: 80}
+                velocity:
+                    x: {mean: 0, std: 15}
+                    y: {mean: 0, std: 15}
+                acceleration:
+                    x: {mean: 0, std: 4}
+                    y: {mean: 0, std: 4}
+                yaw:
+                    rad: {mean: 0, std: 1}
+            pedestrian:
+                position:
+                    x: {mean: 0, std: 1}
+                    y: {mean: 0, std: 1}
+                velocity:
+                    x: {mean: 0, std: 2}
+                    y: {mean: 0, std: 2}
+                acceleration:
+                    x: {mean: 0, std: 1}
+                    y: {mean: 0, std: 1}
+        state:
+            vehicle:
+                position: ["x", "y"]
+                velocity: ["x", "y"]
+                acceleration: ["x", "y"]
+                yaw: ["rad"]
+            pedestrian:
+                position: ["x", "y"]
+                velocity: ["x", "y"]
+                acceleration: ["x", "y"]
+        pred_state:
+            vehicle:
+                position: ["x", "y"]
+            pedestrian:
+                position: ["x", "y"]
+        edge_addition_filter: [0.25, 0.5, 0.75, 1.0]
+        edge_removal_filter: [1.0, 0.0]
+        node_frequency_multiplier: False
+        scene_frequency_multiplier: False
+    architecture:
+        encoder:
+            history_dim: 32
+            future_dim: 32
+            edge_state_dim: 32
+            edge_state_combine_method: sum
+            edge_influence_dim: 32
+            edge_influence_combine_method: attention
+            p_dropout: 0.25
+            use_dynamic_edges: True
+            map_encoder:
+                padding: 50  # [m]  # Put here?
+                vehicle:
+                    heading_state_index: 6
+                    map_channels: 8
+                    hidden_channels: [10, 20, 10, 1]
+                    output_size: 32
+                    masks: [5, 5, 5, 3]
+                    strides: [2, 2, 1, 1]
+                    patch_size: [50, 10, 50, 90]
+                    p_dropout: 0.5
+        latent:
+            use_z_logit_clipping: True
+            n: 1
+            k: 25
+            kl_min: 0.07
+            p_z_x_mlp_dim: 32
+            q_z_xy_mlp_dim: null
+            p_dropout: 0.1
+        decoder:
+            rnn_dim: 128
+            n_gmm_components: 1
+            dynamical_model:
+                vehicle:
+                    type: Unicycle
+                    use_distribution: True
+                    kwargs:
+                        dt: 0.2
+                        limits:
+                            max_a: 4
+                            min_a: -5
+                            max_heading_change: 0.7
+                            min_heading_change: -0.7
+                pedestrian:
+                    type: SingleIntegrator
+                    use_distribution: True
+                    kwargs:
+                        dt: 0.2
+                        limits: {}
+training:
+    n_epochs: 10
+    device: cuda:0
+    optimizers:
+        vehicle:
+            type: Adam
+            kwargs:
+                lr: 0.003
+                params:
+                  - params:
+                        type: exclude
+                        module: node_models.vehicle.encoder.map_encoder
+                  - params:
+                        type: include
+                        module: node_models.vehicle.encoder.map_encoder
+                    lr: 0.0008
+        pedestrian:
+            type: Adam
+            kwargs:
+                lr: 0.003
+                params:
+                  - params:
+                        type: exclude
+                        module: node_models.pedestrian.encoder.map_encoder
+                  - params:
+                        type: include
+                        module: node_models.pedestrian.encoder.map_encoder
+                    lr: 0.0008                                  
+    lr_schedulers:
+        vehicle:
+            type: ExponentialLR
+            kwargs:
+                gamma: 0.9999
+        pedestrian:
+            type: ExponentialLR
+            kwargs:
+                gamma: 0.9999
+    schedulers:
+        kl_weight:
+            type: SigmoidScheduler
+            kwargs:
+                start: 0
+                stop: 100
+                center_step: 400
+                steps_low_to_high: 100
+        tau:
+            type: ExponentialScheduler
+            kwargs:
+                start: 2
+                stop: 0.05
+                rate: 0.997
+        z_logit_clip:
+            type: SigmoidScheduler
+            kwargs:
+                start: 0.05
+                stop: 5
+                center_step: 300
+                steps_low_to_high: 60
+    grad_clip_val: 1.0
+    loss:
+        max_log_p_yt_xz: 6
+    metrics:
+        ade:
+            type: average_displacement_error
+            kwargs:
+                reduce: mean
+        fde:
+            type: final_displacement_error
+            kwargs:
+                reduce: mean
+    logging:
+        log_every_n_steps:
+            train: 50
+            val: 1
+        n_val_samples: 5

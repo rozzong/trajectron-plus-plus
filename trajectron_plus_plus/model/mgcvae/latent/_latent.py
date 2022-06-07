@@ -32,11 +32,11 @@ class DiscreteLatent(nn.Module):
         self.p_dropout = p_dropout
         self.kl_min = kl_min
 
-        self._z_logit_clip = None
-        self.p = None
-        self.q = None
-        self.p_z_x = None
-        self.q_z_xy = None
+        self._z_logit_clip: Optional[float] = None
+        self.p: Optional[PDistribution] = None
+        self.q: Optional[QDistribution] = None
+        self.p_z_x: Optional[nn.Sequential] = None
+        self.q_z_xy: Optional[nn.Sequential] = None
 
         self._build()
 
