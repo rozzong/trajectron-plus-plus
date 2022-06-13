@@ -14,8 +14,8 @@ class DiscreteLatent(nn.Module):
             self,
             n: int,
             k: int,
-            x_size: int,
-            y_size: int,
+            x_dim: int,
+            y_dim: int,
             p_z_x_mlp_dims: Optional[int] = None,
             q_z_xy_mlp_dims: Optional[int] = None,
             p_dropout: Optional[float] = None,
@@ -25,8 +25,8 @@ class DiscreteLatent(nn.Module):
 
         self.n = n
         self.k = k
-        self.x_size = x_size
-        self.y_size = y_size  # 4 * self.hyperparams['enc_rnn_dim_future']
+        self.x_dim = x_dim
+        self.y_dim = y_dim
         self.p_z_x_mlp_dims = p_z_x_mlp_dims
         self.q_z_xy_mlp_dims = q_z_xy_mlp_dims
         self.p_dropout = p_dropout
@@ -58,33 +58,33 @@ class DiscreteLatent(nn.Module):
         self._z_logit_clip = value
 
     @property
-    def z_size(self) -> int:
+    def z_dim(self) -> int:
         return self.n * self.k
 
     def _build(self):
         self.p_z_x = nn.Sequential(
             nn.Sequential(
-                nn.Linear(self.x_size, self.p_z_x_mlp_dims),
+                nn.Linear(self.x_dim, self.p_z_x_mlp_dims),
                 nn.ReLU(),
                 nn.Dropout(self.p_dropout)
             ) if self.p_z_x_mlp_dims is not None else nn.Identity(),
             nn.Linear(
-                self.p_z_x_mlp_dims or self.x_size,
-                self.z_size
+                self.p_z_x_mlp_dims or self.x_dim,
+                self.z_dim
             )
         )
         self.q_z_xy = nn.Sequential(
             nn.Sequential(
                 nn.Linear(
-                    self.x_size + self.y_size,
+                    self.x_dim + self.y_dim,
                     self.q_z_xy_mlp_dims
                 ),
                 nn.ReLU(),
                 nn.Dropout(self.p_dropout)
             ) if self.q_z_xy_mlp_dims is not None else nn.Identity(),
             nn.Linear(
-                self.q_z_xy_mlp_dims or (self.x_size + self.y_size),
-                self.z_size
+                self.q_z_xy_mlp_dims or (self.x_dim + self.y_dim),
+                self.z_dim
             )
         )
 
@@ -103,7 +103,7 @@ class DiscreteLatent(nn.Module):
             y: Optional[torch.Tensor] = None,
             n_samples: int = 1,
             mode: Mode = Mode.MOST_LIKELY
-    ):
+    ) -> torch.Tensor:
         # If no label is provided, the model is assumed to be used for
         # prediction
         is_predicting = y is None

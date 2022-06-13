@@ -1,5 +1,5 @@
 from inspect import stack
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -91,7 +91,7 @@ class MultimodalGenerativeCVAE(nn.Module):
             use_maps: bool,
             config: Mapping[str, Any],
             len_state_robot: Optional[int] = None
-    ):
+    ) -> None:
         super().__init__()
 
         self._include_robot = include_robot
@@ -107,13 +107,15 @@ class MultimodalGenerativeCVAE(nn.Module):
         self.config = config
         self.len_state_robot = len_state_robot
 
-        self.encoder: Optional[MultimodalGenerativeCVAEEncoder] = None
-        self.latent: Optional[DiscreteLatent] = None
-        self.decoder: Optional[MultimodalGenerativeCVAEDecoder] = None
+        self._quantity_indices: Union[Dict[str, torch.Tensor]] = None
+
+        self.encoder: Union[MultimodalGenerativeCVAEEncoder, None] = None
+        self.latent: Union[DiscreteLatent, None] = None
+        self.decoder: Union[MultimodalGenerativeCVAEDecoder, None] = None
 
         self._build()
 
-    def _set_attr_and_propagate(self, value: Any):
+    def _set_attr_and_propagate(self, value: Any) -> None:
         # Get the name of the caller method, i.e. property name
         name = stack()[1][3]
         setattr(self, "_" + name, value)
@@ -126,7 +128,7 @@ class MultimodalGenerativeCVAE(nn.Module):
         return self._include_robot
 
     @include_robot.setter
-    def include_robot(self, value: bool):
+    def include_robot(self, value: bool) -> None:
         self._set_attr_and_propagate(value)
 
     @property
@@ -134,7 +136,7 @@ class MultimodalGenerativeCVAE(nn.Module):
         return self._use_edges
 
     @use_edges.setter
-    def use_edges(self, value: bool):
+    def use_edges(self, value: bool) -> None:
         self._set_attr_and_propagate(value)
 
     @property
@@ -142,7 +144,7 @@ class MultimodalGenerativeCVAE(nn.Module):
         return self._use_maps
 
     @use_maps.setter
-    def use_maps(self, value: bool):
+    def use_maps(self, value: bool) -> None:
         self._set_attr_and_propagate(value)
 
     def _build(self) -> None:
@@ -170,8 +172,8 @@ class MultimodalGenerativeCVAE(nn.Module):
         self.latent = DiscreteLatent(
             self.config["latent"]["n"],
             self.config["latent"]["k"],
-            self.encoder.x_size,
-            self.encoder.y_size,
+            self.encoder.x_dim,
+            self.encoder.y_dim,
             self.config["latent"]["p_z_x_mlp_dim"],
             self.config["latent"]["q_z_xy_mlp_dim"],
             self.config["latent"]["p_dropout"],
@@ -182,14 +184,34 @@ class MultimodalGenerativeCVAE(nn.Module):
             self.len_state,
             self.len_pred_state,
             self.include_robot,
-            self.encoder.x_size,
-            self.latent.z_size,
+            self.encoder.x_dim,
+            self.latent.z_dim,
             self.config["decoder"]["rnn_dim"],
             self.config["decoder"]["n_gmm_components"],
             self.config["decoder"]["use_state_attention"],
             self.config["decoder"]["dynamical_model"][self.agent_type],
             self.len_state_robot
         )
+
+    def get_initial_conditions(self, inputs) -> Dict[str, torch.Tensor]:
+        quantities = ("position", "velocity")
+        if self._quantity_indices is None:
+            state_keys = [
+                (quantity, axis) for quantity, axes
+                in self.state[self.agent_type].items()
+                for axis in axes
+            ]
+            self._quantity_indices = {
+                quantity: torch.tensor(
+                    [i for i, k in enumerate(state_keys) if k[0] == "velocity"]
+                ) for quantity in quantities
+            }
+        initial_conditions = {
+            quantity[:3]: inputs[:, -1, self._quantity_indices[quantity]]
+            for quantity in quantities
+        }
+
+        return initial_conditions
 
     def forward(
             self,
@@ -207,7 +229,7 @@ class MultimodalGenerativeCVAE(nn.Module):
             n_samples: int = 1,
             mode: Optional[Mode] = None,
             gmm_mode: bool = False
-    ):
+    ) -> Tuple["GMM2D", torch.Tensor]:
         # If no label is provided, the model is assumed to be used for
         # prediction
         is_predicting = labels is None
@@ -238,31 +260,14 @@ class MultimodalGenerativeCVAE(nn.Module):
             dist = self.latent.q
             n_components = self.latent.q.n_components
 
-        # Take the last node history state as the current state
-        x_t0 = inputs_st[:, -1]
-
-        # If robot states are available, extract the current and future ones
-        if encoded_robot_future is not None:
-            x_r_t0 = robot_future_st[..., 0, :]
-            y_r = robot_future_st[..., 1:, :]
-        else:
-            x_r_t0 = None
-            y_r = None
-
-        # Assuming positions account for the two first columns of the state,
-        # and velocities for the next two
-        # TODO: Make it more flexible
-        initial_conditions = {
-            "pos": inputs[:, -1, 0:2],
-            "vel": inputs[:, -1, 2:4]
-        }
+        # Get the initial conditions for the dynamical model
+        initial_conditions = self.get_initial_conditions(inputs)
 
         # Run the decoder
         y_dist, preds = self.decoder(
             x,
-            x_r_t0,
-            y_r,
-            x_t0,
+            inputs_st,
+            robot_future_st if encoded_robot_future is not None else None,
             z,
             dist,
             initial_conditions,

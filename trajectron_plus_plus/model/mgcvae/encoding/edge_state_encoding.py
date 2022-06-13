@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Union
+from typing import Callable, List, Mapping, Sequence, Union
 
 import torch
 from torch import nn
@@ -14,8 +14,8 @@ class EdgeStateEncoder(nn.Module, ABC):
     def __init__(
             self,
             edge_type,
-            input_size: int,
-            output_size: int,
+            input_dim: int,
+            output_dim: int,
             p: float,
             use_dynamic_edges: bool,
             *args,
@@ -24,8 +24,8 @@ class EdgeStateEncoder(nn.Module, ABC):
         super().__init__()
 
         self.edge_type = edge_type
-        self.input_size = input_size
-        self.output_size = output_size
+        self.input_dim = input_dim
+        self.output_dim = output_dim
         self.p = p
         self.use_dynamic_edges = use_dynamic_edges
 
@@ -44,9 +44,9 @@ class EdgeStateEncoder(nn.Module, ABC):
 
     def _build(self, *args, **kwargs):
         self.combiner_output_size = self._build_combiner(*args, **kwargs)
-        self.lstm = nn.LSTM(
+        self.encoder = nn.LSTM(
             input_size=self.combiner_output_size,
-            hidden_size=self.output_size,
+            hidden_size=self.output_dim,
             batch_first=True
         )
         self.dropout = nn.Dropout(self.p)
@@ -57,17 +57,16 @@ class EdgeStateEncoder(nn.Module, ABC):
 
     def forward(
             self,
-            node_history_st,
-            neighbors,
-            neighbors_edge_value,
-            first_history_indices,
-            states
-    ):
-        edge_states_list = []   # [Number of neighbors, max_ht, state_dim]
+            node_history_st: torch.Tensor,
+            neighbors: List[List[torch.Tensor]],
+            neighbors_edge_value: List[torch.Tensor],
+            first_history_indices: torch.Tensor,
+            states: Mapping[str, Mapping[str, Sequence[str]]]
+    ) -> torch.Tensor:
+        edge_states_list = []
         for i, neighbor_states in enumerate(neighbors):
             if len(neighbor_states):
-                edge_states_list.append(
-                    torch.stack(neighbor_states, dim=0))
+                edge_states_list.append(torch.stack(neighbor_states, dim=0))
             else:
                 len_neighbor_state = sum(
                     [len(axes) for axes in states[self.edge_type[1]].values()]
@@ -90,22 +89,22 @@ class EdgeStateEncoder(nn.Module, ABC):
         )
 
         outputs, _ = run_lstm_on_variable_length_seqs(
-            self.lstm,
+            self.encoder,
             original_seqs=joint_history,
             lower_indices=first_history_indices
         )
         outputs = self.dropout(outputs)
         last_index_per_sequence = -(first_history_indices + 1)
 
-        ret = outputs[
+        outputs = outputs[
             torch.arange(len(last_index_per_sequence)),
             last_index_per_sequence
         ]
 
         if self.use_dynamic_edges:
-            ret *= combined_edge_masks
+            outputs *= combined_edge_masks
 
-        return ret
+        return outputs
 
 
 class ReducingEdgeStateEncoder(EdgeStateEncoder):
@@ -113,16 +112,16 @@ class ReducingEdgeStateEncoder(EdgeStateEncoder):
     def __init__(
             self,
             edge_type,
-            input_size: int,
-            output_size: int,
+            input_dim: int,
+            output_dim: int,
             p: float,
             use_dynamic_edges: bool,
             reduce: Union[Callable, str],
     ):
         super().__init__(
             edge_type,
-            input_size,
-            output_size,
+            input_dim,
+            output_dim,
             p,
             use_dynamic_edges,
             reduce
@@ -133,7 +132,7 @@ class ReducingEdgeStateEncoder(EdgeStateEncoder):
             reduce = getattr(torch, reduce)
         self.reduce = reduce
 
-        return self.input_size
+        return self.input_dim
 
     def combine(self, edge_states_list, neighbors_edge_value):
         op_applied_edge_states_list = []
@@ -164,15 +163,15 @@ class PointNetEdgeStateEncoder(EdgeStateEncoder):
     def __init__(
             self,
             edge_type,
-            input_size: int,
-            output_size: int,
+            input_dim: int,
+            output_dim: int,
             p: float,
             use_dynamic_edges: bool,
     ):
         super().__init__(
             edge_type,
-            input_size,
-            output_size,
+            input_dim,
+            output_dim,
             p,
             use_dynamic_edges,
         )
@@ -191,15 +190,15 @@ class AttentionEdgeStateEncoder(EdgeStateEncoder):
     def __init__(
             self,
             edge_type,
-            input_size: int,
-            output_size: int,
+            input_dim: int,
+            output_dim: int,
             p: float,
             use_dynamic_edges: bool,
     ):
         super().__init__(
             edge_type,
-            input_size,
-            output_size,
+            input_dim,
+            output_dim,
             p,
             use_dynamic_edges,
         )

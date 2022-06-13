@@ -195,7 +195,7 @@ class TrajectronPlusPlus(nn.Module):
             n_samples: int = 1,
             mode: Optional[Mode] = None,
             gmm_mode: bool = False
-    ) -> Tuple[Dict[str, "GMM2D"], Dict[str, torch.Tensor]]:
+    ) -> Tuple["GMM2D", torch.Tensor]:
         # Identify the agent type of the batch
         agent_type = self.get_agent_type(neighbors_data_st)
 

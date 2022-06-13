@@ -1,9 +1,13 @@
 from ._encoding import MultimodalGenerativeCVAEEncoder
 from .edge_influence_encoding import (
-    ReducingEdgeInfluenceEncoder,
+    AttentionEdgeInfluenceEncoder,
     BiRNNEdgeInfluenceEncoder,
-    AttentionEdgeInfluenceEncoder
+    ReducingEdgeInfluenceEncoder
 )
-from .edge_state_encoding import ReducingEdgeStateEncoder
+from .edge_state_encoding import (
+    AttentionEdgeStateEncoder,
+    PointNetEdgeStateEncoder,
+    ReducingEdgeStateEncoder
+)
 from .map_encoding import CNNMapEncoder
 from .node_encoding import NodeHistoryEncoder, NodeFutureEncoder

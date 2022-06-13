@@ -1,4 +1,4 @@
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 import torch
 from torch import nn
@@ -6,7 +6,7 @@ from torch import nn
 from . import dynamics
 from .gmm2d import GMM2D
 from .state_attention import StateAttention
-from ..latent.distributions import PDistribution
+from ..latent.distributions import LatentDistribution, PDistribution
 
 
 class MultimodalGenerativeCVAEDecoder(nn.Module):
@@ -17,14 +17,14 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
             len_state: int,
             len_pred_state: int,
             include_robot: bool,
-            x_size: int,
-            z_size: int,
+            x_dim: int,
+            z_dim: int,
             rnn_dim: int,
             n_gmm_components: int,
             use_state_attention: bool,
             dynamical_model_config: Mapping[str, Any],
             len_state_robot: Optional[int] = None,
-    ):
+    ) -> None:
         super().__init__()
 
         self._include_robot = include_robot
@@ -32,8 +32,8 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
         self.agent_type = agent_type
         self.len_state = len_state
         self.len_pred_state = len_pred_state
-        self.x_size = x_size
-        self.z_size = z_size
+        self.x_dim = x_dim
+        self.z_dim = z_dim
         self.rnn_dim = rnn_dim
         self.n_gmm_components = n_gmm_components
         self.use_state_attention = use_state_attention
@@ -52,38 +52,38 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
 
     def _build(self) -> None:
         # Build the RNN
-        input_size = self.len_pred_state + self.z_size + self.x_size
+        input_dim = self.len_pred_state + self.z_dim + self.x_dim
         if self.include_robot:
-            input_size += self.len_state_robot
+            input_dim += self.len_state_robot
 
         self.state_action = nn.Linear(self.len_state, self.len_pred_state)
-        self.rnn_cell = nn.GRUCell(input_size, self.rnn_dim)
-        self.initial_h = nn.Linear(self.z_size + self.x_size, self.rnn_dim)
+        self.rnn_cell = nn.GRUCell(input_dim, self.rnn_dim)
+        self.initial_h = nn.Linear(self.z_dim + self.x_dim, self.rnn_dim)
 
         # Add state attention, if asked
         if self.use_state_attention:
             self.state_attention = StateAttention(
-                self.x_size,
+                self.x_dim,
                 self.rnn_dim
             )
 
         # Build the GMM parameters models
         self.proj_to_gmm = nn.ModuleDict()
         self.proj_to_gmm["log_pis"] = nn.Linear(
-            self.rnn_dim + int(self.use_state_attention) * self.x_size,
+            self.rnn_dim + int(self.use_state_attention) * self.x_dim,
             self.n_gmm_components
         )
         self.proj_to_gmm["mus"] = nn.Linear(
-            self.rnn_dim + int(self.use_state_attention) * self.x_size,
+            self.rnn_dim + int(self.use_state_attention) * self.x_dim,
             self.n_gmm_components * self.len_pred_state
         )
         self.proj_to_gmm["log_sigmas"] = nn.Linear(
-            self.rnn_dim + int(self.use_state_attention) * self.x_size,
+            self.rnn_dim + int(self.use_state_attention) * self.x_dim,
             self.n_gmm_components * self.len_pred_state
         )
         self.proj_to_gmm["corrs"] = nn.Sequential(
             nn.Linear(
-                self.rnn_dim + int(self.use_state_attention) * self.x_size,
+                self.rnn_dim + int(self.use_state_attention) * self.x_dim,
                 self.n_gmm_components,
             ),
             nn.Tanh()
@@ -91,7 +91,7 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
 
         # Instantiate the dynamical model
         if self.dynamical_model_config["type"] == "Unicycle":
-            self.dynamical_model_config["kwargs"]["xz_size"] = self.x_size
+            self.dynamical_model_config["kwargs"]["xz_size"] = self.x_dim
 
         self.dynamical_model = getattr(
             dynamics,
@@ -109,18 +109,17 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
 
     def forward(
             self,
-            x,
-            x_nr_t,
-            y_r,
-            x_r_t0,
-            z_stacked,
-            dist,
-            initial_conditions,
-            prediction_horizon,
+            x: torch.Tensor,
+            inputs_st: torch.Tensor,
+            robot_future_st: torch.Tensor,
+            z_stacked: torch.Tensor,
+            dist: LatentDistribution,
+            initial_conditions: Mapping[str, torch.Tensor],
+            prediction_horizon: int,
             n_samples: int,
             n_components: int = 1,
             gmm_mode: bool = False
-    ):
+    ) -> Tuple[GMM2D, torch.Tensor]:
         # Compute the batch size
         batch_size = len(x)
 
@@ -128,20 +127,23 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
         is_predicting = isinstance(dist, PDistribution)
 
         # Concatenate the input encodings and the latent variable
-        z = torch.reshape(z_stacked, (-1, self.z_size))
-        zx = torch.cat([z, x.repeat(n_samples * n_components, 1)], dim=1)
+        z = torch.reshape(z_stacked, (-1, self.z_dim))
+        x_repeat = x.repeat(n_samples * n_components, 1)
+        zx = torch.cat([z, x_repeat], dim=1)
 
         # Initialise the state
         state = self.initial_h(zx)
 
         log_pis, mus, log_sigmas, corrs = [], [], [], []
 
-        # Get the first action state
-        a_0 = self.state_action(x_r_t0)
+        # Get the first action based on the last nodes states
+        a_0 = self.state_action(inputs_st[:, -1])
 
         inputs = [zx, a_0.repeat(n_samples * n_components, 1)]
-        if x_nr_t is not None and self.include_robot:
-            inputs.append(x_nr_t.repeat(n_samples * n_components, 1))
+        if robot_future_st is not None and self.include_robot:
+            inputs.append(
+                robot_future_st[:, 0].repeat(n_samples * n_components, 1)
+            )
         inputs = torch.cat(inputs, dim=1)
 
         for t_f in range(prediction_horizon):
@@ -187,11 +189,14 @@ class MultimodalGenerativeCVAEDecoder(nn.Module):
             )
 
             # Update inputs
-            inputs = [
-                zx, a_t, y_r[:, t_f].repeat(n_samples * n_components, 1)
-            ] if y_r is not None and self.include_robot else [
-                zx, a_t
-            ]
+            inputs = [zx, a_t]
+            if robot_future_st is not None and self.include_robot:
+                inputs.append(
+                    robot_future_st[:, t_f+1].repeat(
+                        n_samples * n_components,
+                        1
+                    )
+                )
             inputs = torch.cat(inputs, dim=1)
 
         log_pis = torch.stack(log_pis, dim=1)

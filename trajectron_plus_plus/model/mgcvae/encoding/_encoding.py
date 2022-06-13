@@ -1,4 +1,4 @@
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Tuple, Union
 
 import torch
 from torch import nn
@@ -89,7 +89,7 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
         self._use_maps = value
 
     @property
-    def x_size(self) -> int:
+    def x_dim(self) -> int:
         """Size of the encoded input. This encoded tensor is the concatenation
         of the following tensors, depending on the uses:
         - encoded history
@@ -121,7 +121,7 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
         return sum(dims)
 
     @property
-    def y_size(self) -> int:
+    def y_dim(self) -> int:
         """Size of the encoded label.
         """
         return 4 * self.future_dim
@@ -171,19 +171,19 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
                 len_neighbor_state = sum(
                     [len(axes) for axes in self.state[edge_type[1]].values()]
                 )
-                edge_encoder_input_size = self.len_state + len_neighbor_state
+                edge_encoder_input_dim = self.len_state + len_neighbor_state
                 if self.edge_state_combine_method in ("sum", "max", "mean"):
                     self.edge_state_encoders[edge_type_key] = \
                         ReducingEdgeStateEncoder(
                             edge_type,
-                            edge_encoder_input_size,
+                            edge_encoder_input_dim,
                             self.edge_state_dim,
                             self.p_dropout,
                             self.use_dynamic_edges,
                             self.edge_state_combine_method,
                         )
                 elif self.edge_state_combine_method == "pointnet":
-                    edge_encoder_input_size += self.len_state
+                    edge_encoder_input_dim += self.len_state
                     raise NotImplementedError
                 elif self.edge_state_combine_method == "attention":
                     raise NotImplementedError
@@ -211,7 +211,7 @@ class MultimodalGenerativeCVAEEncoder(nn.Module):
             neighbors_edge_value: Optional[torch.Tensor] = None,
             encoded_robot_future: Optional[torch.Tensor] = None,
             maps: Optional[torch.Tensor] = None,
-    ):
+    ) -> Tuple[torch.Tensor, Union[torch.Tensor, None]]:
         batch_size = len(inputs_st)
         is_predicting = labels_st is None
 

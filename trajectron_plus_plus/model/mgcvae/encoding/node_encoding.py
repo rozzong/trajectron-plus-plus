@@ -10,16 +10,16 @@ class NodeEncoder(nn.Module, ABC):
 
     def __init__(
             self,
-            input_size: int,
-            hidden_size: int,
+            input_dim: int,
+            hidden_dim: int,
             p: float,
             *args,
             **kwargs
     ):
         super().__init__()
 
-        self.input_size = input_size
-        self.hidden_size = hidden_size
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
         self.p = p
 
         self.lstm = None
@@ -36,20 +36,20 @@ class NodeHistoryEncoder(NodeEncoder):
 
     def __init__(
             self,
-            input_size: int,
-            hidden_size: int,
+            input_dim: int,
+            hidden_dim: int,
             p: float
     ):
         super().__init__(
-            input_size,
-            hidden_size,
+            input_dim,
+            hidden_dim,
             p,
         )
 
     def _build(self):
         self.lstm = nn.LSTM(
-            input_size=self.input_size,
-            hidden_size=self.hidden_size,
+            input_size=self.input_dim,
+            hidden_size=self.hidden_dim,
             batch_first=True
         )
         self.dropout = nn.Dropout(self.p)
@@ -78,8 +78,8 @@ class NodeFutureEncoder(NodeEncoder):
 
     def __init__(
             self,
-            input_size: int,
-            hidden_size: int,
+            input_dim: int,
+            hidden_dim: int,
             initializer_input_size: int,
             p: float
     ):
@@ -88,15 +88,15 @@ class NodeFutureEncoder(NodeEncoder):
         self.state_initializers = None
 
         super().__init__(
-            input_size,
-            hidden_size,
+            input_dim,
+            hidden_dim,
             p,
         )
 
     def _build(self):
         self.lstm = nn.LSTM(
-            input_size=self.input_size,
-            hidden_size=self.hidden_size,
+            input_size=self.input_dim,
+            hidden_size=self.hidden_dim,
             bidirectional=True,
             batch_first=True
         )
@@ -106,7 +106,7 @@ class NodeFutureEncoder(NodeEncoder):
             {
                 k: nn.Linear(
                     self.initializer_input_size,
-                    self.hidden_size
+                    self.hidden_dim
                 ) for k in self.keys
             }
         )

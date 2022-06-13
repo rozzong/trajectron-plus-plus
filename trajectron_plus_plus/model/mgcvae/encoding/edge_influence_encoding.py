@@ -54,20 +54,20 @@ class ReducingEdgeInfluenceEncoder(EdgeInfluenceEncoder):
 
 class BiRNNEdgeInfluenceEncoder(EdgeInfluenceEncoder):
 
-    def __init__(self, input_size: int, hidden_size: int, p: float):
+    def __init__(self, input_dim: int, hidden_dim: int, p: float):
         super().__init__()
 
-        self.input_size = input_size
-        self.hidden_size = hidden_size
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
         self.p = p
 
         self._build()
 
     def _build(self):
-        self.output_size = 4 * self.hidden_size
+        self.output_dim = 4 * self.hidden_dim
         self.combiner = nn.LSTM(
-            input_size=self.input_size,
-            hidden_size=self.hidden_size,
+            input_size=self.input_dim,
+            hidden_size=self.hidden_dim,
             bidirectional=True,
             batch_first=True
         )
@@ -85,7 +85,7 @@ class BiRNNEdgeInfluenceEncoder(EdgeInfluenceEncoder):
             combined_edges = unpack_rnn_state(state)
             combined_edges = self.dropout(combined_edges)
         else:
-            combined_edges = torch.zeros((batch_size, self.output_size))
+            combined_edges = torch.zeros((batch_size, self.output_dim))
 
         return combined_edges
 
@@ -107,7 +107,7 @@ class AttentionEdgeInfluenceEncoder(EdgeInfluenceEncoder):
         self._build()
 
     def _build(self):
-        self.output_size = self.encoder_hidden_size
+        self.output_dim = self.encoder_hidden_size
         self.combiner = AdditiveAttention(
             encoder_hidden_state_dim=self.encoder_hidden_size,
             decoder_hidden_state_dim=self.decoder_hidden_size,
@@ -128,6 +128,6 @@ class AttentionEdgeInfluenceEncoder(EdgeInfluenceEncoder):
             )
             combined_edges = self.dropout(combined_edges)
         else:
-            combined_edges = torch.zeros((batch_size, self.output_size))
+            combined_edges = torch.zeros((batch_size, self.output_dim))
 
         return combined_edges
